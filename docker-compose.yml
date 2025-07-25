@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  pharmacy-app:
+    build:
+      context: .
+      target: development
+    container_name: pharmacy_app_dev
+    ports:
+      - "5174:5174"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./data:/app/data  # Mount local data directory for SQLite file persistence
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+    stdin_open: true
+    tty: true
+    networks:
+      - pharmacy-network
+
+  # Production version (uncomment to use)
+  # pharmacy-app-prod:
+  #   build:
+  #     context: .
+  #     target: production
+  #   container_name: pharmacy_app_prod
+  #   ports:
+  #     - "8080:80"
+  #   volumes:
+  #     - ./data:/app/data  # Mount local data directory for SQLite file persistence
+  #   restart: unless-stopped
+  #   networks:
+  #     - pharmacy-network
+
+networks:
+  pharmacy-network:
+    driver: bridge
+
+volumes:
+  node_modules: 

@@ -17,49 +17,26 @@ export const useSQLiteData = () => {
         locateFile: file => `https://sql.js.org/dist/${file}`
       });
 
-      // Try to load existing database from localStorage
-      const savedDb = localStorage.getItem('pharmacy_sqlite_db');
       let database;
       
+      // Try to load existing database from localStorage
+      const savedDb = localStorage.getItem('pharmacy_sqlite_db');
       if (savedDb) {
         // Load existing database
-        const uint8Array = new Uint8Array(JSON.parse(savedDb));
-        database = new SQL.Database(uint8Array);
+        try {
+          const uint8Array = new Uint8Array(JSON.parse(savedDb));
+          database = new SQL.Database(uint8Array);
+        } catch (err) {
+          console.warn('Could not load saved database, creating new one:', err);
+          database = new SQL.Database();
+          await createTables(database);
+          await insertSampleData(database);
+        }
       } else {
         // Create new database
         database = new SQL.Database();
-        
-        // Create products table
-        database.run(`
-          CREATE TABLE IF NOT EXISTS products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code TEXT UNIQUE NOT NULL,
-            brand TEXT,
-            generic_name TEXT NOT NULL,
-            dosage_form TEXT NOT NULL,
-            price REAL NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-          )
-        `);
-
-        // Insert initial sample data
-        const sampleProducts = [
-          ['PRD001', 'Saline Solution', '0.9% SODIUM CHLORIDE', 'SOLUTION 250 mL BOTTLE', 15.99],
-          ['PRD002', 'Dextrose IV', '5% DEXTROSE IN WATER', 'SOLUTION 500 mL BOTTLE', 22.50],
-          ['PRD003', 'Aciclovir Tablets', 'ACICLOVIR', '200 mg TABLET', 45.75]
-        ];
-
-        const insertStmt = database.prepare(`
-          INSERT INTO products (code, brand, generic_name, dosage_form, price) 
-          VALUES (?, ?, ?, ?, ?)
-        `);
-
-        sampleProducts.forEach(product => {
-          insertStmt.run(product);
-        });
-
-        insertStmt.free();
+        await createTables(database);
+        await insertSampleData(database);
       }
 
       setDb(database);
@@ -67,6 +44,40 @@ export const useSQLiteData = () => {
     } catch (err) {
       throw new Error(`Failed to initialize SQLite database: ${err.message}`);
     }
+  };
+
+  const createTables = async (database) => {
+    database.run(`
+      CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT UNIQUE NOT NULL,
+        brand TEXT,
+        generic_name TEXT NOT NULL,
+        dosage_form TEXT NOT NULL,
+        price REAL NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  };
+
+  const insertSampleData = async (database) => {
+    const sampleProducts = [
+      ['PRD001', 'Saline Solution', '0.9% SODIUM CHLORIDE', 'SOLUTION 250 mL BOTTLE', 15.99],
+      ['PRD002', 'Dextrose IV', '5% DEXTROSE IN WATER', 'SOLUTION 500 mL BOTTLE', 22.50],
+      ['PRD003', 'Aciclovir Tablets', 'ACICLOVIR', '200 mg TABLET', 45.75]
+    ];
+
+    const insertStmt = database.prepare(`
+      INSERT INTO products (code, brand, generic_name, dosage_form, price) 
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    sampleProducts.forEach(product => {
+      insertStmt.run(product);
+    });
+
+    insertStmt.free();
   };
 
   // Save database to localStorage
@@ -177,7 +188,10 @@ export const useSQLiteData = () => {
   };
 
   const addProduct = (newProduct) => {
-    if (!db) return;
+    if (!db) {
+      setError('Database not initialized');
+      return;
+    }
 
     try {
       // Generate unique code
@@ -216,12 +230,15 @@ export const useSQLiteData = () => {
       return newProductWithCode;
     } catch (err) {
       console.error('Error adding product:', err);
-      setError('Failed to add product to database');
+      setError(`Failed to add product: ${err.message}`);
     }
   };
 
   const updateProduct = (code, updatedProduct) => {
-    if (!db) return;
+    if (!db) {
+      setError('Database not initialized');
+      return;
+    }
 
     try {
       // Update in database
@@ -259,12 +276,15 @@ export const useSQLiteData = () => {
       showSuccessMessage(`✅ Product "${updatedProduct.Brand || 'Product'}" updated successfully!`);
     } catch (err) {
       console.error('Error updating product:', err);
-      setError('Failed to update product in database');
+      setError(`Failed to update product: ${err.message}`);
     }
   };
 
   const deleteProduct = (code) => {
-    if (!db) return;
+    if (!db) {
+      setError('Database not initialized');
+      return;
+    }
 
     try {
       const productToDelete = products.find(p => p.code === code);
@@ -283,7 +303,7 @@ export const useSQLiteData = () => {
       showSuccessMessage(`✅ Product "${productToDelete?.Brand || 'Product'}" deleted successfully!`);
     } catch (err) {
       console.error('Error deleting product:', err);
-      setError('Failed to delete product from database');
+      setError(`Failed to delete product: ${err.message}`);
     }
   };
 
@@ -302,8 +322,31 @@ export const useSQLiteData = () => {
     showSuccessMessage('✅ Products exported to CSV successfully!');
   };
 
+  const downloadSQLiteFile = () => {
+    if (!db) {
+      setError('Database not initialized');
+      return;
+    }
+    
+    try {
+      const data = db.export();
+      const blob = new Blob([data], { type: 'application/x-sqlite3' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'pharmacy.sqlite';
+      link.click();
+      showSuccessMessage('✅ SQLite database file downloaded successfully! You can place this in ./data/ folder for persistence.');
+    } catch (err) {
+      console.error('Error downloading SQLite file:', err);
+      setError(`Failed to download SQLite file: ${err.message}`);
+    }
+  };
+
   const clearAllData = () => {
-    if (!db) return;
+    if (!db) {
+      setError('Database not initialized');
+      return;
+    }
 
     try {
       // Clear all products from database
@@ -318,7 +361,7 @@ export const useSQLiteData = () => {
       showSuccessMessage('✅ All products cleared from database!');
     } catch (err) {
       console.error('Error clearing data:', err);
-      setError('Failed to clear data from database');
+      setError(`Failed to clear data: ${err.message}`);
     }
   };
 
@@ -334,6 +377,7 @@ export const useSQLiteData = () => {
     updateProduct,
     deleteProduct,
     exportToCSV,
+    downloadSQLiteFile,
     clearAllData,
     refreshData: loadData
   };
