@@ -18,23 +18,37 @@ export const useSQLiteData = () => {
       });
 
       let database;
+      let isNewDatabase = false;
       
       // Try to load existing SQLite file from data directory
       try {
         const response = await fetch('/data/pharmacy.sqlite');
         if (response.ok) {
           const arrayBuffer = await response.arrayBuffer();
-          const uint8Array = new Uint8Array(arrayBuffer);
-          database = new SQL.Database(uint8Array);
-          console.log('✅ Loaded existing SQLite database from /data/pharmacy.sqlite');
+          
+          // Check if the file has content (not empty)
+          if (arrayBuffer.byteLength > 0) {
+            const uint8Array = new Uint8Array(arrayBuffer);
+            database = new SQL.Database(uint8Array);
+            console.log('✅ Loaded existing SQLite database from /data/pharmacy.sqlite');
+          } else {
+            throw new Error('SQLite file is empty');
+          }
         } else {
           throw new Error('SQLite file not found');
         }
       } catch (err) {
         console.log('📝 Creating new SQLite database (no existing file found)');
-        // Create new database if file doesn't exist
+        // Create new database if file doesn't exist or is invalid
         database = new SQL.Database();
-        await createTables(database);
+        isNewDatabase = true;
+      }
+
+      // Always ensure tables exist (safe with IF NOT EXISTS)
+      await createTables(database);
+      
+      // Only insert sample data if this is a completely new database
+      if (isNewDatabase) {
         await insertSampleData(database);
       }
 
