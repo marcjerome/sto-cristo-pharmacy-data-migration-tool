@@ -270,8 +270,10 @@ function App() {
 
       <footer className="app-footer">
         <div className="footer-instructions">
-          <p><strong>🗄️ Database:</strong> SQLite database stored in browser localStorage</p>
-          <p>Use "🗃️ Download SQLite" to backup your database file to <code>./data/</code> folder</p>
+          <p><strong>🗄️ Database:</strong> Pure SQLite file storage - no browser localStorage</p>
+          <p>1. Download SQLite file after making changes</p>
+          <p>2. Place <code>pharmacy.sqlite</code> in <code>./data/</code> folder to persist data</p>
+          <p>3. Refresh app to load saved data from file</p>
         </div>
       </footer>
     </div>

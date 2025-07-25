@@ -19,21 +19,20 @@ export const useSQLiteData = () => {
 
       let database;
       
-      // Try to load existing database from localStorage
-      const savedDb = localStorage.getItem('pharmacy_sqlite_db');
-      if (savedDb) {
-        // Load existing database
-        try {
-          const uint8Array = new Uint8Array(JSON.parse(savedDb));
+      // Try to load existing SQLite file from data directory
+      try {
+        const response = await fetch('/data/pharmacy.sqlite');
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          const uint8Array = new Uint8Array(arrayBuffer);
           database = new SQL.Database(uint8Array);
-        } catch (err) {
-          console.warn('Could not load saved database, creating new one:', err);
-          database = new SQL.Database();
-          await createTables(database);
-          await insertSampleData(database);
+          console.log('✅ Loaded existing SQLite database from /data/pharmacy.sqlite');
+        } else {
+          throw new Error('SQLite file not found');
         }
-      } else {
-        // Create new database
+      } catch (err) {
+        console.log('📝 Creating new SQLite database (no existing file found)');
+        // Create new database if file doesn't exist
         database = new SQL.Database();
         await createTables(database);
         await insertSampleData(database);
@@ -78,17 +77,6 @@ export const useSQLiteData = () => {
     });
 
     insertStmt.free();
-  };
-
-  // Save database to localStorage
-  const saveDatabase = (database) => {
-    try {
-      const data = database.export();
-      const buffer = JSON.stringify(Array.from(data));
-      localStorage.setItem('pharmacy_sqlite_db', buffer);
-    } catch (err) {
-      console.error('Error saving database:', err);
-    }
   };
 
   // Load CSV file for item codes
@@ -212,9 +200,6 @@ export const useSQLiteData = () => {
       ]);
       stmt.free();
 
-      // Save database
-      saveDatabase(db);
-
       // Update state with consistent property names
       const newProductWithCode = {
         code,
@@ -226,7 +211,7 @@ export const useSQLiteData = () => {
 
       setProducts(prev => [newProductWithCode, ...prev]);
       
-      showSuccessMessage(`✅ Product "${newProduct.Brand || 'New Product'}" added successfully!`);
+      showSuccessMessage(`✅ Product "${newProduct.Brand || 'New Product'}" added successfully! Download SQLite file to save permanently.`);
       return newProductWithCode;
     } catch (err) {
       console.error('Error adding product:', err);
@@ -257,9 +242,6 @@ export const useSQLiteData = () => {
       ]);
       stmt.free();
 
-      // Save database
-      saveDatabase(db);
-
       // Update state with consistent property names
       setProducts(prev => 
         prev.map(product => 
@@ -273,7 +255,7 @@ export const useSQLiteData = () => {
         )
       );
       
-      showSuccessMessage(`✅ Product "${updatedProduct.Brand || 'Product'}" updated successfully!`);
+      showSuccessMessage(`✅ Product "${updatedProduct.Brand || 'Product'}" updated successfully! Download SQLite file to save permanently.`);
     } catch (err) {
       console.error('Error updating product:', err);
       setError(`Failed to update product: ${err.message}`);
@@ -294,13 +276,10 @@ export const useSQLiteData = () => {
       stmt.run([code]);
       stmt.free();
 
-      // Save database
-      saveDatabase(db);
-
       // Update state
       setProducts(prev => prev.filter(product => product.code !== code));
       
-      showSuccessMessage(`✅ Product "${productToDelete?.Brand || 'Product'}" deleted successfully!`);
+      showSuccessMessage(`✅ Product "${productToDelete?.Brand || 'Product'}" deleted successfully! Download SQLite file to save permanently.`);
     } catch (err) {
       console.error('Error deleting product:', err);
       setError(`Failed to delete product: ${err.message}`);
@@ -335,7 +314,7 @@ export const useSQLiteData = () => {
       link.href = URL.createObjectURL(blob);
       link.download = 'pharmacy.sqlite';
       link.click();
-      showSuccessMessage('✅ SQLite database file downloaded successfully! You can place this in ./data/ folder for persistence.');
+      showSuccessMessage('✅ SQLite database downloaded! Place this file in ./data/ folder to persist your data.');
     } catch (err) {
       console.error('Error downloading SQLite file:', err);
       setError(`Failed to download SQLite file: ${err.message}`);
@@ -351,14 +330,11 @@ export const useSQLiteData = () => {
     try {
       // Clear all products from database
       db.run('DELETE FROM products');
-      
-      // Save database
-      saveDatabase(db);
 
       // Update state
       setProducts([]);
       
-      showSuccessMessage('✅ All products cleared from database!');
+      showSuccessMessage('✅ All products cleared from database! Download SQLite file to save changes.');
     } catch (err) {
       console.error('Error clearing data:', err);
       setError(`Failed to clear data: ${err.message}`);
