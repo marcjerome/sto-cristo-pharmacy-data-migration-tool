@@ -16,12 +16,32 @@ app.use(express.static('public'));
 // Configure multer for file uploads
 const upload = multer({ dest: 'uploads/' });
 
-// SQLite database path
-const DB_PATH = path.join(__dirname, '..', 'data', 'pharmacy.sqlite');
+// SQLite database path - corrected to match volume mount
+const DATA_DIR = path.join(__dirname, 'data');
+const DB_PATH = path.join(DATA_DIR, 'pharmacy.sqlite');
+
+// Ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  console.log(`📁 Created data directory: ${DATA_DIR}`);
+}
 
 // Initialize database
 const initDB = () => {
-  const db = new sqlite3.Database(DB_PATH);
+  // Check if database file exists, create if not
+  if (!fs.existsSync(DB_PATH)) {
+    console.log(`📝 Creating new database file: ${DB_PATH}`);
+    // Touch the file first
+    fs.writeFileSync(DB_PATH, '');
+  }
+  
+  const db = new sqlite3.Database(DB_PATH, (err) => {
+    if (err) {
+      console.error('❌ Error opening database:', err.message);
+      return;
+    }
+    console.log('✅ Connected to SQLite database');
+  });
   
   db.serialize(() => {
     db.run(`
@@ -35,17 +55,32 @@ const initDB = () => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
-    `);
+    `, (err) => {
+      if (err) {
+        console.error('❌ Error creating table:', err.message);
+      } else {
+        console.log('✅ Products table ready');
+      }
+    });
   });
   
-  db.close();
+  db.close((err) => {
+    if (err) {
+      console.error('❌ Error closing database:', err.message);
+    }
+  });
 };
 
 // API Routes
 
 // Get all products
 app.get('/api/products', (req, res) => {
-  const db = new sqlite3.Database(DB_PATH);
+  const db = new sqlite3.Database(DB_PATH, (err) => {
+    if (err) {
+      console.error('Database connection error:', err.message);
+      return res.status(500).json({ error: 'Database connection failed' });
+    }
+  });
   
   db.all(`
     SELECT code, brand as "Brand", generic_name as "Generic Name", 
@@ -54,6 +89,7 @@ app.get('/api/products', (req, res) => {
     ORDER BY created_at DESC
   `, (err, rows) => {
     if (err) {
+      console.error('Query error:', err.message);
       res.status(500).json({ error: err.message });
       return;
     }
@@ -76,13 +112,19 @@ app.post('/api/products', (req, res) => {
   const { Brand, 'Generic Name': genericName, 'Dosage Form': dosageForm, Price } = req.body;
   const code = `PRD${Date.now()}${Math.floor(Math.random() * 1000)}`;
   
-  const db = new sqlite3.Database(DB_PATH);
+  const db = new sqlite3.Database(DB_PATH, (err) => {
+    if (err) {
+      console.error('Database connection error:', err.message);
+      return res.status(500).json({ error: 'Database connection failed' });
+    }
+  });
   
   db.run(`
     INSERT INTO products (code, brand, generic_name, dosage_form, price)
     VALUES (?, ?, ?, ?, ?)
   `, [code, Brand || '', genericName, dosageForm, parseFloat(Price)], function(err) {
     if (err) {
+      console.error('Insert error:', err.message);
       res.status(500).json({ error: err.message });
       return;
     }
@@ -104,7 +146,12 @@ app.put('/api/products/:code', (req, res) => {
   const { code } = req.params;
   const { Brand, 'Generic Name': genericName, 'Dosage Form': dosageForm, Price } = req.body;
   
-  const db = new sqlite3.Database(DB_PATH);
+  const db = new sqlite3.Database(DB_PATH, (err) => {
+    if (err) {
+      console.error('Database connection error:', err.message);
+      return res.status(500).json({ error: 'Database connection failed' });
+    }
+  });
   
   db.run(`
     UPDATE products 
@@ -112,6 +159,7 @@ app.put('/api/products/:code', (req, res) => {
     WHERE code = ?
   `, [Brand || '', genericName, dosageForm, parseFloat(Price), code], function(err) {
     if (err) {
+      console.error('Update error:', err.message);
       res.status(500).json({ error: err.message });
       return;
     }
@@ -132,10 +180,16 @@ app.put('/api/products/:code', (req, res) => {
 app.delete('/api/products/:code', (req, res) => {
   const { code } = req.params;
   
-  const db = new sqlite3.Database(DB_PATH);
+  const db = new sqlite3.Database(DB_PATH, (err) => {
+    if (err) {
+      console.error('Database connection error:', err.message);
+      return res.status(500).json({ error: 'Database connection failed' });
+    }
+  });
   
   db.run('DELETE FROM products WHERE code = ?', [code], function(err) {
     if (err) {
+      console.error('Delete error:', err.message);
       res.status(500).json({ error: err.message });
       return;
     }
@@ -148,6 +202,9 @@ app.delete('/api/products/:code', (req, res) => {
 
 // Download SQLite database
 app.get('/api/download-db', (req, res) => {
+  if (!fs.existsSync(DB_PATH)) {
+    return res.status(404).json({ error: 'Database file not found' });
+  }
   res.download(DB_PATH, 'pharmacy.sqlite');
 });
 
@@ -163,6 +220,7 @@ app.post('/api/upload-db', upload.single('database'), (req, res) => {
     fs.unlink(req.file.path, () => {});
     
     if (err) {
+      console.error('File copy error:', err.message);
       return res.status(500).json({ error: 'Failed to update database' });
     }
     
@@ -171,9 +229,12 @@ app.post('/api/upload-db', upload.single('database'), (req, res) => {
 });
 
 // Initialize and start server
+console.log(`📁 Data directory: ${DATA_DIR}`);
+console.log(`🗄️ Database path: ${DB_PATH}`);
+
 initDB();
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Backend server running on port ${PORT}`);
   console.log(`📁 Database: ${DB_PATH}`);
 });

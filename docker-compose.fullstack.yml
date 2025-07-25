@@ -32,7 +32,4 @@ services:
 
 networks:
   pharmacy-network:
-    driver: bridge
-
-volumes:
-  pharmacy-data: 
+    driver: bridge 
