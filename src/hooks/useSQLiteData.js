@@ -20,28 +20,43 @@ export const useSQLiteData = () => {
       let database;
       let isNewDatabase = false;
       
-      // Try to load existing SQLite file from data directory
-      try {
-        const response = await fetch('/data/pharmacy.sqlite');
-        if (response.ok) {
-          const arrayBuffer = await response.arrayBuffer();
-          
-          // Check if the file has content (not empty)
-          if (arrayBuffer.byteLength > 0) {
-            const uint8Array = new Uint8Array(arrayBuffer);
-            database = new SQL.Database(uint8Array);
-            console.log('✅ Loaded existing SQLite database from /data/pharmacy.sqlite');
-          } else {
-            throw new Error('SQLite file is empty');
-          }
-        } else {
-          throw new Error('SQLite file not found');
+      // Priority 1: Try to load from localStorage (user's latest changes)
+      const savedDb = localStorage.getItem('pharmacy_sqlite_db');
+      if (savedDb) {
+        try {
+          console.log('✅ Loading latest changes from browser storage');
+          const uint8Array = new Uint8Array(JSON.parse(savedDb));
+          database = new SQL.Database(uint8Array);
+        } catch (err) {
+          console.warn('Could not load from browser storage, trying file...', err);
+          database = null;
         }
-      } catch (err) {
-        console.log('📝 Creating new SQLite database (no existing file found)');
-        // Create new database if file doesn't exist or is invalid
-        database = new SQL.Database();
-        isNewDatabase = true;
+      }
+      
+      // Priority 2: Try to load existing SQLite file from data directory (initial/backup data)
+      if (!database) {
+        try {
+          const response = await fetch('/data/pharmacy.sqlite');
+          if (response.ok) {
+            const arrayBuffer = await response.arrayBuffer();
+            
+            // Check if the file has content (not empty)
+            if (arrayBuffer.byteLength > 0) {
+              const uint8Array = new Uint8Array(arrayBuffer);
+              database = new SQL.Database(uint8Array);
+              console.log('✅ Loaded initial data from /data/pharmacy.sqlite');
+            } else {
+              throw new Error('SQLite file is empty');
+            }
+          } else {
+            throw new Error('SQLite file not found');
+          }
+        } catch (err) {
+          console.log('📝 Creating new SQLite database (no existing data found)');
+          // Create new database if file doesn't exist or is invalid
+          database = new SQL.Database();
+          isNewDatabase = true;
+        }
       }
 
       // Always ensure tables exist (safe with IF NOT EXISTS)
@@ -53,9 +68,24 @@ export const useSQLiteData = () => {
       }
 
       setDb(database);
+      
+      // Save initial database state to localStorage
+      saveDatabase(database);
+      
       return database;
     } catch (err) {
       throw new Error(`Failed to initialize SQLite database: ${err.message}`);
+    }
+  };
+
+  // Save database to localStorage for persistence
+  const saveDatabase = (database) => {
+    try {
+      const data = database.export();
+      const buffer = JSON.stringify(Array.from(data));
+      localStorage.setItem('pharmacy_sqlite_db', buffer);
+    } catch (err) {
+      console.error('Error saving database:', err);
     }
   };
 
@@ -214,6 +244,9 @@ export const useSQLiteData = () => {
       ]);
       stmt.free();
 
+      // Save database changes
+      saveDatabase(db);
+
       // Update state with consistent property names
       const newProductWithCode = {
         code,
@@ -225,7 +258,7 @@ export const useSQLiteData = () => {
 
       setProducts(prev => [newProductWithCode, ...prev]);
       
-      showSuccessMessage(`✅ Product "${newProduct.Brand || 'New Product'}" added successfully! Download SQLite file to save permanently.`);
+      showSuccessMessage(`✅ Product "${newProduct.Brand || 'New Product'}" added successfully!`);
       return newProductWithCode;
     } catch (err) {
       console.error('Error adding product:', err);
@@ -256,6 +289,9 @@ export const useSQLiteData = () => {
       ]);
       stmt.free();
 
+      // Save database changes
+      saveDatabase(db);
+
       // Update state with consistent property names
       setProducts(prev => 
         prev.map(product => 
@@ -269,7 +305,7 @@ export const useSQLiteData = () => {
         )
       );
       
-      showSuccessMessage(`✅ Product "${updatedProduct.Brand || 'Product'}" updated successfully! Download SQLite file to save permanently.`);
+      showSuccessMessage(`✅ Product "${updatedProduct.Brand || 'Product'}" updated successfully!`);
     } catch (err) {
       console.error('Error updating product:', err);
       setError(`Failed to update product: ${err.message}`);
@@ -290,10 +326,13 @@ export const useSQLiteData = () => {
       stmt.run([code]);
       stmt.free();
 
+      // Save database changes
+      saveDatabase(db);
+
       // Update state
       setProducts(prev => prev.filter(product => product.code !== code));
       
-      showSuccessMessage(`✅ Product "${productToDelete?.Brand || 'Product'}" deleted successfully! Download SQLite file to save permanently.`);
+      showSuccessMessage(`✅ Product "${productToDelete?.Brand || 'Product'}" deleted successfully!`);
     } catch (err) {
       console.error('Error deleting product:', err);
       setError(`Failed to delete product: ${err.message}`);
@@ -345,13 +384,32 @@ export const useSQLiteData = () => {
       // Clear all products from database
       db.run('DELETE FROM products');
 
+      // Save database changes
+      saveDatabase(db);
+
       // Update state
       setProducts([]);
       
-      showSuccessMessage('✅ All products cleared from database! Download SQLite file to save changes.');
+      showSuccessMessage('✅ All products cleared from database!');
     } catch (err) {
       console.error('Error clearing data:', err);
       setError(`Failed to clear data: ${err.message}`);
+    }
+  };
+
+  const resetToFileData = async () => {
+    try {
+      // Clear localStorage to force reload from file
+      localStorage.removeItem('pharmacy_sqlite_db');
+      
+      // Reload the page to restart with file data
+      showSuccessMessage('🔄 Reloading from file data...');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (err) {
+      console.error('Error resetting to file data:', err);
+      setError(`Failed to reset to file data: ${err.message}`);
     }
   };
 
@@ -369,6 +427,7 @@ export const useSQLiteData = () => {
     exportToCSV,
     downloadSQLiteFile,
     clearAllData,
+    resetToFileData,
     refreshData: loadData
   };
 }; 

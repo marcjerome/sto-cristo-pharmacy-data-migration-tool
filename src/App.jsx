@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useSQLiteData } from './hooks/useSQLiteData';
+import { useAPIData } from './hooks/useAPIData';
 import ProductForm from './components/ProductForm';
 import ProductTable from './components/ProductTable';
 import './App.css';
@@ -17,8 +17,9 @@ function App() {
     deleteProduct,
     exportToCSV,
     downloadSQLiteFile,
+    uploadSQLiteFile,
     clearAllData
-  } = useSQLiteData();
+  } = useAPIData();
 
   const [editingProduct, setEditingProduct] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -62,6 +63,19 @@ function App() {
     if (window.confirm('Are you sure you want to delete ALL products? This action cannot be undone.')) {
       clearAllData();
     }
+  };
+
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      if (file.name.endsWith('.sqlite') || file.name.endsWith('.db')) {
+        uploadSQLiteFile(file);
+      } else {
+        alert('Please select a valid SQLite database file (.sqlite or .db)');
+      }
+    }
+    // Reset input
+    event.target.value = '';
   };
 
   if (loading) {
@@ -243,6 +257,15 @@ function App() {
             >
               🗃️ Download SQLite
             </button>
+            <label className="btn btn-upload" title="Upload SQLite database file">
+              📤 Upload SQLite
+              <input
+                type="file"
+                accept=".sqlite,.db"
+                onChange={handleFileUpload}
+                style={{ display: 'none' }}
+              />
+            </label>
           
           </div>
         </div>
@@ -270,10 +293,10 @@ function App() {
 
       <footer className="app-footer">
         <div className="footer-instructions">
-          <p><strong>🗄️ Database:</strong> Pure SQLite file storage - no browser localStorage</p>
-          <p>1. Download SQLite file after making changes</p>
-          <p>2. Place <code>pharmacy.sqlite</code> in <code>./data/</code> folder to persist data</p>
-          <p>3. Refresh app to load saved data from file</p>
+          <p><strong>🗄️ Database:</strong> SQLite file stored on server with API access</p>
+          <p>✅ <strong>Auto-persistence</strong> - All changes saved to server database file</p>
+          <p>📥 <strong>Download/Upload</strong> - Export and import SQLite database files</p>
+          <p>🌐 <strong>Cross-device sync</strong> - Same data accessible from any computer</p>
         </div>
       </footer>
     </div>

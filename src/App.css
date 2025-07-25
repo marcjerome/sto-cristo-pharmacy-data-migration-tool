@@ -110,6 +110,8 @@ body {
   justify-content: center;
 }
 
+
+
 .product-count {
   font-size: 1.1rem;
   color: #4a5568;
@@ -195,12 +197,15 @@ body {
 }
 
 .btn-secondary {
-  background: #e2e8f0;
-  color: #4a5568;
+  background: #6c757d;
+  color: white;
+  border: 1px solid #6c757d;
 }
 
 .btn-secondary:hover {
-  background: #cbd5e0;
+  background: #5a6268;
+  border-color: #545b62;
+  transform: translateY(-1px);
 }
 
 .btn-cancel {
@@ -234,6 +239,22 @@ body {
 
 .btn-delete:hover {
   background: #feb2b2;
+}
+
+.btn-upload {
+  background: #17a2b8;
+  color: white;
+  border: 1px solid #17a2b8;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.btn-upload:hover {
+  background: #138496;
+  border-color: #117a8b;
+  transform: translateY(-1px);
 }
 
 /* Loading and error states */

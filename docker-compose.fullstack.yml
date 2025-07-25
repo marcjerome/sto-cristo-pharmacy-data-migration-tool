@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  # Backend API Server
+  pharmacy-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - pharmacy-network
+
+  # Frontend React App
+  pharmacy-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - "8080:80"
+    depends_on:
+      - pharmacy-backend
+    restart: unless-stopped
+    networks:
+      - pharmacy-network
+
+networks:
+  pharmacy-network:
+    driver: bridge
+
+volumes:
+  pharmacy-data: 
